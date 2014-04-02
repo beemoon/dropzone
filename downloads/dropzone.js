@@ -1522,9 +1522,67 @@ require.register("dropzone/lib/dropzone.js", function(exports, require, module){
       }
       for (_m = 0, _len4 = files.length; _m < _len4; _m++) {
         file = files[_m];
-        formData.append("" + this.options.paramName + (this.options.uploadMultiple ? "[]" : ""), file, file.name);
+        //formData.append("" + this.options.paramName + (this.options.uploadMultiple ? "[]" : ""), file, file.name);
+        
+        //--> Beemoon start     
+        if((file.type.match(/image.*/) && !file.type.match(/image\/tiff/)) && (typeof this.options.resizedWidth !== 'undefined' || typeof this.options.resizedHeight !== 'undefined'))
+					{
+            var _paramName= this.options.paramName;
+            var _uploadMultiple= this.options.uploadMultiple;
+            
+            var imgWidth = this.options.resizedWidth,
+                imgHeight = this.options.resizedHeight;
+          
+            var reader = new FileReader();
+                reader.readAsDataURL(file);    
+                reader.onload = function(e){
+                    var image = new Image();
+                        image.src = e.target.result;
+                        image.onload = function(){
+                          
+                          // Define new size
+                          var srcRatio = image.width / image.height;
+                          if ((typeof imgWidth !== 'undefined') && (typeof imgHeight !== 'undefined')) {
+                            if (imgWidth<imgHeight) {
+                              imgHeight=imgWidth/srcRatio;
+                            }else{
+                              imgWidth=srcRatio*imgHeight;
+                            }
+                          }else{
+                            if (typeof imgWidth !== 'undefined') {
+                              imgHeight=imgWidth/srcRatio;
+                            }else{
+                              imgWidth=srcRatio*imgHeight;
+                            }
+                          }	
+                           
+                          //define canvas
+                          var canvas = document.createElement('canvas');
+                              canvas.width = imgWidth;
+                              canvas.height = imgHeight;
+                              
+                          //resize image
+                          var ctx = canvas.getContext('2d');
+                              ctx.clearRect(0, 0, canvas.width, canvas.height);
+                              ctx.drawImage(image, 0, 0, imgWidth, imgHeight);
+                  
+                          //convert canvas to jpeg url
+                          var dataURL = canvas.toDataURL('image/jpeg',0.7);
+                          
+                          //return new resized image
+                          formData.append("" + _paramName + (_uploadMultiple ? "[]" : ""),dataURItoBlob(dataURL),file.name);
+                          return xhr.send(formData);
+                        }
+                };
+                  
+        }else{
+            // return original file
+            formData.append("" + this.options.paramName + (this.options.uploadMultiple ? "[]" : ""), file, file.name);
+            return xhr.send(formData);
+        }
+        //---> Beemoon end
       }
-      return xhr.send(formData);
+      //return xhr.send(formData);
     };
 
     Dropzone.prototype._finished = function(files, responseText, e) {
@@ -1917,3 +1975,33 @@ if (typeof exports == "object") {
 } else {
   this["Dropzone"] = require("dropzone");
 }})();
+
+//---> Beemoon start
+//   piece of code from http://www.inwebson.com/html5/html5-drag-and-drop-file-upload-with-canvas
+function dataURItoBlob(dataURI) {
+        // convert base64 to raw binary data held in a string
+        // doesn't handle URLEncoded DataURIs
+        var byteString;
+        if (dataURI.split(',')[0].indexOf('base64') >= 0)
+                byteString = atob(dataURI.split(',')[1]);
+        else
+                byteString = unescape(dataURI.split(',')[1]);
+
+        // separate out the mime component
+        var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0]
+
+        // write the bytes of the string to an ArrayBuffer
+        var ab = new ArrayBuffer(byteString.length);
+        var ia = new Uint8Array(ab);
+        for (var i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+        }
+
+        //Passing an ArrayBuffer to the Blob constructor appears to be deprecated, 
+        //so convert ArrayBuffer to DataView
+        var dataView = new DataView(ab);
+        var blob = new Blob([dataView], {type: mimeString});
+
+        return blob;
+}
+//---> Beemoon end
